@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galáxia de Coração</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #05010d; overflow: hidden; }
+  canvas { position: fixed; inset: 0; display: block; touch-action: none; }
+  .msg {
+    position: fixed; left: 0; right: 0; bottom: 6vh; text-align: center;
+    font-family: "Segoe UI", system-ui, sans-serif; color: #ffd6ec; pointer-events: none;
+    padding: 0 16px;
+  }
+  .msg h1 {
+    margin: 0; font-weight: 300; letter-spacing: .12em; font-size: clamp(1.6rem, 5vw, 3rem);
+    text-shadow: 0 0 12px #ff4fa3, 0 0 32px #c02cff, 0 0 60px #ff4fa3;
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  .msg p {
+    margin: .6em 0 0; font-size: clamp(.9rem, 2.4vw, 1.2rem); opacity: .8; letter-spacing: .08em;
+    transition: opacity 1.2s;
+  }
+  @keyframes pulse { 50% { text-shadow: 0 0 18px #ff7ac0, 0 0 44px #d84bff, 0 0 80px #ff4fa3; } }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="msg">
+  <h1 id="titulo"></h1>
+  <p id="frase"></p>
+</div>
+
+<script>
+// ✏️ Personalize aqui
+const NOME = "Hannie";
+const FRASES = [
+  "Você é a minha galáxia inteira.",
+  "Entre todas as estrelas, eu escolho você.",
+  "Meu coração orbita em volta do seu.",
+  "Te amo além do infinito. ✦",
+];
+
+document.getElementById("titulo").textContent = "Te amo, " + NOME;
+const frase = document.getElementById("frase");
+let fi = 0;
+frase.textContent = FRASES[0];
+setInterval(() => {
+  frase.style.opacity = 0;
+  setTimeout(() => { fi = (fi + 1) % FRASES.length; frase.textContent = FRASES[fi]; frase.style.opacity = .8; }, 1200);
+}, 5000);
+
+const cv = document.getElementById("c"), ctx = cv.getContext("2d");
+let W, H, S, discScale, cx, cy;
+function resize() {
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  S = Math.min(W * 0.55 / 32, H * 0.5 / 30);
+  discScale = Math.min(1, (W * 0.48) / (38 * S));
+  cx = W / 2; cy = H * 0.44;
+}
+addEventListener("resize", resize); resize();
+
+const rnd = (a, b) => a + Math.random() * (b - a);
+const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
+
+// paleta (rosa, magenta, roxo, branco quente)
+const PAL = [[255,79,163],[255,122,192],[216,75,255],[160,90,255],[255,210,235],[255,255,255]];
+
+// ---------- coração ----------
+const NH = 7000;
+const H_ = { x: new Float32Array(NH), y: new Float32Array(NH), z: new Float32Array(NH),
+             b: new Uint8Array(NH), s: new Float32Array(NH), p: new Float32Array(NH) };
+for (let i = 0; i < NH; i++) {
+  const t = Math.random() * Math.PI * 2;
+  let hx = 16 * Math.pow(Math.sin(t), 3);
+  let hy = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+  // metade na borda (bem definida), metade preenchida
+  const edge = Math.random() < 0.45;
+  const r = edge ? 1 - Math.pow(Math.random(), 3) * 0.08 : Math.sqrt(Math.random());
+  hx *= r; hy = (hy + 2.5) * r - 2.5;
+  const j = edge ? 0.35 : 0.2;
+  H_.x[i] = hx + gauss() * j;
+  H_.y[i] = hy + gauss() * j;
+  H_.z[i] = gauss() * 5 * Math.sqrt(Math.max(0, 1 - r * r) + 0.15);
+  // centro mais claro, borda mais rosa/roxa
+  const k = Math.random();
+  H_.b[i] = edge ? (k < .5 ? 0 : k < .8 ? 2 : 1) : (k < .4 ? 1 : k < .7 ? 4 : k < .9 ? 0 : 5);
+  H_.s[i] = rnd(0.8, 2.1);
+  H_.p[i] = Math.random() * 6.283;
+}
+
+// ---------- disco da galáxia (braços em espiral) ----------
+const ND = 9000, ARMS = 3;
+const D_ = { r: new Float32Array(ND), a: new Float32Array(ND), y: new Float32Array(ND),
+             b: new Uint8Array(ND), s: new Float32Array(ND), p: new Float32Array(ND) };
+for (let i = 0; i < ND; i++) {
+  const r = 9 + Math.pow(Math.random(), 1.6) * 30;
+  const arm = (i % ARMS) * (Math.PI * 2 / ARMS);
+  D_.r[i] = r;
+  D_.a[i] = arm + r * 0.16 + gauss() * (0.25 + r * 0.012);
+  D_.y[i] = gauss() * (0.4 + r * 0.05);
+  const k = Math.random(), f = r / 39;
+  D_.b[i] = k < 0.06 ? 5 : f < .4 ? (k < .5 ? 4 : 1) : f < .75 ? (k < .5 ? 0 : 2) : (k < .6 ? 3 : 2);
+  D_.s[i] = rnd(0.5, 1.6);
+  D_.p[i] = Math.random() * 6.283;
+}
+
+// ---------- estrelas de fundo ----------
+const stars = Array.from({ length: 220 }, () => ({
+  x: Math.random(), y: Math.random(), r: rnd(0.3, 1.4), p: Math.random() * 6.283, v: rnd(1, 3),
+}));
+let shooting = [];
+let hearts = [];
+
+// ---------- interação ----------
+let tx = 0, ty = 0, gx = 0, gy = 0, dragging = false, lx = 0, ly = 0, dragYaw = 0, dragPitch = 0;
+addEventListener("pointermove", e => {
+  tx = (e.clientX / W - 0.5); ty = (e.clientY / H - 0.5);
+  if (dragging) { dragYaw += (e.clientX - lx) * 0.006; dragPitch += (e.clientY - ly) * 0.006; lx = e.clientX; ly = e.clientY; }
+});
+addEventListener("pointerdown", e => {
+  dragging = true; lx = e.clientX; ly = e.clientY;
+  for (let i = 0; i < 6; i++) spawnHeart(e.clientX + rnd(-20, 20), e.clientY + rnd(-10, 10));
+});
+addEventListener("pointerup", () => dragging = false);
+function spawnHeart(x, y) {
+  hearts.push({ x, y, vx: rnd(-.4, .4), vy: rnd(-1.6, -.6), life: 1, size: rnd(12, 26), hue: Math.random() < .5 ? "#ff7ac0" : "#e070ff" });
+}
+
+// ---------- render ----------
+function rot(x, y, z, yaw, pitch) {
+  const c = Math.cos(yaw), s = Math.sin(yaw);
+  const x1 = x * c + z * s, z1 = -x * s + z * c;
+  const c2 = Math.cos(pitch), s2 = Math.sin(pitch);
+  return [x1, y * c2 - z1 * s2, y * s2 + z1 * c2];
+}
+
+const FOV = 90;
+const colStr = PAL.map(c => `rgb(${c[0]},${c[1]},${c[2]})`);
+const TILT = 1.15;
+let t0 = performance.now();
+
+function frame(now) {
+  const t = (now - t0) / 1000;
+  // suaviza a câmera
+  dragYaw *= dragging ? 1 : 0.95; dragPitch *= dragging ? 1 : 0.95;
+  gx += (tx - gx) * 0.05; gy += (ty - gy) * 0.05;
+  const gYaw = gx * 0.7 + dragYaw, gPitch = -gy * 0.5 + dragPitch;
+
+  // fundo
+  ctx.globalCompositeOperation = "source-over";
+  const bg = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.75);
+  bg.addColorStop(0, "#1d0522"); bg.addColorStop(0.5, "#0a0219"); bg.addColorStop(1, "#03000a");
+  ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+
+  // estrelas
+  for (const s of stars) {
+    const a = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * s.v + s.p));
+    ctx.globalAlpha = a * 0.8; ctx.fillStyle = "#fff";
+    ctx.fillRect(s.x * W + gx * s.r * 14, s.y * H + gy * s.r * 14, s.r, s.r);
+  }
+  // estrelas cadentes
+  if (Math.random() < 0.006) shooting.push({ x: rnd(0.2, 1) * W, y: rnd(0, 0.4) * H, vx: -rnd(7, 12), vy: rnd(3, 6), life: 1 });
+  ctx.globalAlpha = 1; ctx.lineCap = "round";
+  shooting = shooting.filter(s => s.life > 0);
+  for (const s of shooting) {
+    ctx.strokeStyle = `rgba(255,220,240,${s.life})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(s.x - s.vx * 6, s.y - s.vy * 6); ctx.stroke();
+    s.x += s.vx; s.y += s.vy; s.life -= 0.02;
+  }
+
+  ctx.globalCompositeOperation = "lighter";
+
+  // brilho central pulsando
+  const beat = 1 + 0.06 * Math.pow(Math.max(0, Math.sin(t * 3)), 6) + 0.02 * Math.sin(t * 1.3);
+  const glowR = S * 26 * beat;
+  const gl = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowR);
+  gl.addColorStop(0, "rgba(255,70,150,.30)"); gl.addColorStop(0.5, "rgba(170,50,230,.10)"); gl.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.globalAlpha = 1; ctx.fillStyle = gl; ctx.fillRect(cx - glowR, cy - glowR, glowR * 2, glowR * 2);
+
+  // projeta tudo em buckets por cor
+  const buckets = PAL.map(() => []);
+  const push = (b, sx, sy, sz) => { const a = buckets[b]; a.push(sx, sy, sz); };
+
+  // disco
+  for (let i = 0; i < ND; i++) {
+    const r = D_.r[i];
+    const a = D_.a[i] + t * 1.1 / Math.sqrt(r);
+    let x = Math.cos(a) * r * discScale, z = Math.sin(a) * r * discScale, y = D_.y[i];
+    // inclina o disco
+    const ct = Math.cos(TILT), st = Math.sin(TILT);
+    const y1 = y * ct - z * st, z1 = y * st + z * ct;
+    const p = rot(x, y1, z1, gYaw, gPitch);
+    const f = FOV / (FOV + p[2]);
+    const tw = 0.7 + 0.3 * Math.sin(t * 2 + D_.p[i]);
+    push(D_.b[i], cx + p[0] * S * f, cy + p[1] * S * f, D_.s[i] * f * tw * (S / 12 + 0.6));
+  }
+  // coração (balança suavemente para mostrar o volume)
+  const sway = Math.sin(t * 0.6) * 0.55;
+  for (let i = 0; i < NH; i++) {
+    const p0 = rot(H_.x[i] * beat, -H_.y[i] * beat, H_.z[i] * beat, sway, 0);
+    const p = rot(p0[0], p0[1], p0[2], gYaw, gPitch);
+    const f = FOV / (FOV + p[2]);
+    const tw = 0.7 + 0.3 * Math.sin(t * 3 + H_.p[i]);
+    push(H_.b[i], cx + p[0] * S * f, cy + p[1] * S * f, H_.s[i] * f * tw * (S / 12 + 0.6));
+  }
+
+  ctx.globalAlpha = 0.85;
+  for (let b = 0; b < buckets.length; b++) {
+    const arr = buckets[b];
+    ctx.fillStyle = colStr[b];
+    for (let i = 0; i < arr.length; i += 3) {
+      const s = arr[i + 2];
+      ctx.fillRect(arr[i] - s / 2, arr[i + 1] - s / 2, s, s);
+    }
+  }
+
+  // corações flutuantes
+  ctx.globalCompositeOperation = "source-over";
+  if (Math.random() < 0.04) spawnHeart(rnd(0.1, 0.9) * W, H + 20);
+  hearts = hearts.filter(h => h.life > 0);
+  for (const h of hearts) {
+    ctx.globalAlpha = Math.max(0, h.life);
+    ctx.fillStyle = h.hue; ctx.font = `${h.size}px serif`; ctx.textAlign = "center";
+    ctx.shadowColor = h.hue; ctx.shadowBlur = 12;
+    ctx.fillText("♥", h.x, h.y);
+    h.x += h.vx + Math.sin(h.y / 30) * 0.3; h.y += h.vy; h.life -= 0.004;
+  }
+  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
