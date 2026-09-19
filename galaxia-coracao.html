@@ -282,7 +282,7 @@ const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
 const PAL = [[255,79,163],[255,122,192],[216,75,255],[160,90,255],[255,210,235],[255,255,255]];
 
 // ---------- coração (em pé) ----------
-const HR = 2.1; // raio do buraco negro (menor)
+const HR = 1.0; // raio do buraco negro: só uma bolinha
 const TIPY = 17; // altura da ponta do coração; o disco da galáxia gira exatamente aqui
 const NH = 7000;
 const H_ = { x: new Float32Array(NH), y: new Float32Array(NH), z: new Float32Array(NH),
@@ -306,7 +306,7 @@ for (let i = 0; i < NH; i++) {
 
 // ---------- disco da galáxia (horizontal, braços em espiral) ----------
 const ND = 9000, ARMS = 3;
-const D_ = { r: new Float32Array(ND), a: new Float32Array(ND), y: new Float32Array(ND),
+const D_ = { u: new Float32Array(ND), v: new Float32Array(ND), r: new Float32Array(ND), a: new Float32Array(ND), y: new Float32Array(ND),
              b: new Uint8Array(ND), s: new Float32Array(ND), p: new Float32Array(ND) };
 for (let i = 0; i < ND; i++) {
   const r = 7 + Math.pow(Math.random(), 1.6) * 32;
@@ -318,6 +318,7 @@ for (let i = 0; i < ND; i++) {
   D_.b[i] = k < 0.06 ? 5 : f < .4 ? (k < .5 ? 4 : 1) : f < .75 ? (k < .5 ? 0 : 2) : (k < .6 ? 3 : 2);
   D_.s[i] = rnd(0.5, 1.6);
   D_.p[i] = Math.random() * 6.283;
+  D_.u[i] = Math.random(); D_.v[i] = rnd(0.02, 0.06); // progresso da queda e velocidade
 }
 
 // ---------- bolhas de memórias ----------
@@ -478,7 +479,7 @@ function drawBuckets(bk) {
 let holeBoost = 1;
 function ringArc(hx, hy, rx, ry, a0, a1, w, gt, alpha) {
   const n = 40, step = (a1 - a0) / n;
-  ctx.lineCap = "round"; ctx.lineWidth = w;
+  ctx.lineCap = "round"; ctx.lineWidth = Math.max(1.2, w);
   for (let k = 0; k < n; k++) {
     const s0 = a0 + k * step, s1 = s0 + step * 1.2;
     const dop = 0.5 + 0.5 * Math.cos((s0 + s1) / 2 - gt * 1.6);
@@ -584,12 +585,15 @@ function frame(now) {
 
   // disco horizontal girando ao redor do eixo vertical que passa pela ponta do coração
   for (let i = 0; i < ND; i++) {
-    const r = D_.r[i];
-    const a = D_.a[i] + gt * 1.1 / Math.sqrt(r);
-    const p = rot(Math.cos(a) * r * k, TIPY + D_.y[i], Math.sin(a) * r * k, gYaw, gPitch);
+    const r0 = D_.r[i];
+    const u = (D_.u[i] + gt * D_.v[i]) % 1;                  // 0 = borda, 1 = engolida
+    const r = HR * 1.3 + (r0 - HR * 1.3) * (1 - u);         // vai se aproximando do centro
+    const a = D_.a[i] + gt * 1.1 / Math.sqrt(r0) + 3.0 * u * u; // e gira mais rápido ao cair
+    const fade = Math.min(1, u * 12) * (1 - Math.pow(u, 6));  // surge e some suavemente
+    const p = rot(Math.cos(a) * r * k, TIPY + D_.y[i] * (1 - u), Math.sin(a) * r * k, gYaw, gPitch);
     const f = FOV / (FOV + p[2]);
     const tw = 0.7 + 0.3 * Math.sin(t * 2 + D_.p[i]);
-    (p[2] > hz ? far : near)[D_.b[i]].push(cx + p[0] * S * f, cy + p[1] * S * f, D_.s[i] * f * tw * sz);
+    (p[2] > hz ? far : near)[D_.b[i]].push(cx + p[0] * S * f, cy + p[1] * S * f, D_.s[i] * f * tw * sz * fade);
   }
   // coração em pé, balançando de leve
   const sway = Math.sin(t * 0.6) * 0.4;
