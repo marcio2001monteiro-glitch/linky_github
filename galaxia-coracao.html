@@ -346,6 +346,67 @@ function rot(x, y, z, yaw, pitch) {
   return [x1, y * c2 - z1 * s2, y * s2 + z1 * c2];
 }
 
+function drawBuckets(bk) {
+  ctx.globalAlpha = 0.85;
+  for (let b = 0; b < bk.length; b++) {
+    const arr = bk[b];
+    ctx.fillStyle = colStr[b];
+    for (let i = 0; i < arr.length; i += 3) {
+      const s = arr[i + 2];
+      ctx.fillRect(arr[i] - s / 2, arr[i + 1] - s / 2, s, s);
+    }
+  }
+}
+
+// arco de anel brilhante; o lado que "vem na nossa direção" fica mais claro (efeito Doppler)
+function ringArc(hx, hy, rx, ry, a0, a1, w, gt, alpha) {
+  const n = 40, step = (a1 - a0) / n;
+  ctx.lineCap = "round"; ctx.lineWidth = w;
+  for (let k = 0; k < n; k++) {
+    const s0 = a0 + k * step, s1 = s0 + step * 1.2;
+    const dop = 0.5 + 0.5 * Math.cos((s0 + s1) / 2 - gt * 1.6);
+    ctx.strokeStyle = `rgba(255,${Math.round(140 + 100 * dop)},${Math.round(130 + 100 * dop)},${(alpha * (0.25 + 0.75 * dop)).toFixed(3)})`;
+    ctx.beginPath(); ctx.ellipse(hx, hy, rx, ry, 0, s0, s1); ctx.stroke();
+  }
+}
+
+// buraco negro na ponta do coração: esfera preta, anel de luz e arcos de lente gravitacional
+function drawBlackHole(gPitch, gt) {
+  const p = rot(0, TIPY, 0, 0, gPitch);
+  const f = FOV / (FOV + p[2]);
+  const u = S * f, hx = cx + p[0] * u, hy = cy + p[1] * u;
+  const R = 3.6 * u, rx = 5.8 * u, ry = rx * Math.max(0.06, Math.sin(gPitch));
+  const PI = Math.PI;
+
+  // brilho ao redor
+  ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 1;
+  const g = ctx.createRadialGradient(hx, hy, R * 0.9, hx, hy, R * 3.6);
+  g.addColorStop(0, "rgba(255,120,190,.55)"); g.addColorStop(0.4, "rgba(190,60,230,.2)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = g; ctx.fillRect(hx - R * 3.6, hy - R * 3.6, R * 7.2, R * 7.2);
+
+  // metade de trás do anel (fica atrás da esfera)
+  ringArc(hx, hy, rx, ry, PI, PI * 2, R * 0.30, gt, 0.28);
+  ringArc(hx, hy, rx, ry, PI, PI * 2, R * 0.09, gt, 0.95);
+
+  // a esfera
+  ctx.globalCompositeOperation = "source-over";
+  ctx.fillStyle = "#000"; ctx.beginPath(); ctx.arc(hx, hy, R, 0, PI * 2); ctx.fill();
+
+  ctx.globalCompositeOperation = "lighter";
+  // luz do disco curvada pela gravidade: arco por cima e por baixo da esfera
+  ringArc(hx, hy, rx, R * 1.45, PI, PI * 2, R * 0.22, gt, 0.3);
+  ringArc(hx, hy, rx, R * 1.45, PI, PI * 2, R * 0.07, gt, 0.9);
+  ringArc(hx, hy, rx * 0.92, R * 1.28, 0, PI, R * 0.14, gt, 0.25);
+  // anel de fótons colado na borda
+  ctx.shadowColor = "#ff8ad0"; ctx.shadowBlur = R * 0.6;
+  ctx.strokeStyle = "rgba(255,225,240,.9)"; ctx.lineWidth = Math.max(1.2, R * 0.05);
+  ctx.beginPath(); ctx.arc(hx, hy, R * 1.03, 0, PI * 2); ctx.stroke();
+  ctx.shadowBlur = 0;
+  // metade da frente do anel (passa na frente da esfera)
+  ringArc(hx, hy, rx, ry, 0, PI, R * 0.30, gt, 0.28);
+  ringArc(hx, hy, rx, ry, 0, PI, R * 0.09, gt, 0.95);
+}
+
 const FOV = 90, BASE_PITCH = 0.34;
 const colStr = PAL.map(c => `rgb(${c[0]},${c[1]},${c[2]})`);
 let t0 = performance.now(), last = t0, gt = 0, ts = 1;
@@ -395,8 +456,9 @@ function frame(now) {
   gl2.addColorStop(0, "rgba(255,120,200,.22)"); gl2.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = gl2; ctx.fillRect(cx - gr2, gy2 - gr2, gr2 * 2, gr2 * 2);
 
-  const buckets = PAL.map(() => []);
-  const push = (b, sx, sy, sz) => { buckets[b].push(sx, sy, sz); };
+  // "far" = coração + metade do disco atrás do buraco negro; "near" = metade da frente
+  const far = PAL.map(() => []), near = PAL.map(() => []);
+  const hz = TIPY * Math.sin(gPitch); // profundidade do buraco negro
   const sz = S / 12 + 0.6;
 
   // disco horizontal girando ao redor do eixo vertical que passa pela ponta do coração
@@ -406,7 +468,7 @@ function frame(now) {
     const p = rot(Math.cos(a) * r * discScale, TIPY + D_.y[i], Math.sin(a) * r * discScale, gYaw, gPitch);
     const f = FOV / (FOV + p[2]);
     const tw = 0.7 + 0.3 * Math.sin(t * 2 + D_.p[i]);
-    push(D_.b[i], cx + p[0] * S * f, cy + p[1] * S * f, D_.s[i] * f * tw * sz);
+    (p[2] > hz ? far : near)[D_.b[i]].push(cx + p[0] * S * f, cy + p[1] * S * f, D_.s[i] * f * tw * sz);
   }
   // coração em pé, balançando de leve
   const sway = Math.sin(t * 0.6) * 0.4;
@@ -415,18 +477,13 @@ function frame(now) {
     const p = rot(p0[0], p0[1], p0[2], gYaw, gPitch);
     const f = FOV / (FOV + p[2]);
     const tw = 0.7 + 0.3 * Math.sin(t * 3 + H_.p[i]);
-    push(H_.b[i], cx + p[0] * S * f, cy + p[1] * S * f, H_.s[i] * f * tw * sz);
+    far[H_.b[i]].push(cx + p[0] * S * f, cy + p[1] * S * f, H_.s[i] * f * tw * sz);
   }
 
-  ctx.globalAlpha = 0.85;
-  for (let b = 0; b < buckets.length; b++) {
-    const arr = buckets[b];
-    ctx.fillStyle = colStr[b];
-    for (let i = 0; i < arr.length; i += 3) {
-      const s = arr[i + 2];
-      ctx.fillRect(arr[i] - s / 2, arr[i + 1] - s / 2, s, s);
-    }
-  }
+  drawBuckets(far);                    // coração e o fundo do disco
+  drawBlackHole(gPitch, gt);           // esfera na ponta do coração
+  ctx.globalCompositeOperation = "lighter";
+  drawBuckets(near);                   // parte do disco que passa na frente
 
   // bolhas: giram junto com o disco, com leve flutuação
   for (const b of bubbles) {
