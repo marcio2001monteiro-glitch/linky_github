@@ -49,8 +49,8 @@
   .bubble .in {
     display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; position: relative;
     background: radial-gradient(circle at 50% 58%, var(--a), var(--b) 80%), #2a0a3a;
-    box-shadow: 0 0 0 2px rgba(255,190,230,.8), 0 0 16px 3px rgba(255,79,163,.6), 0 0 40px rgba(190,80,255,.45),
-                inset 0 -10px 18px rgba(120,20,160,.55);
+    box-shadow: 0 0 0 1.5px rgba(255,190,230,.85), 0 0 9px 2px rgba(255,79,163,.65), 0 0 20px rgba(190,80,255,.45),
+                inset 0 -5px 9px rgba(120,20,160,.55);
     animation: brilho 3.2s ease-in-out infinite alternate;
   }
   .bubble .in::after { /* reflexo de vidro */
@@ -59,11 +59,12 @@
   }
   .bubble .cor { /* a foto fica escondida: só o coração aparece até abrir */
     position: relative; z-index: 1; line-height: 1; color: rgba(255,255,255,.92); pointer-events: none;
-    text-shadow: 0 0 10px #fff, 0 0 24px var(--rosa); animation: bate 1.6s ease-in-out infinite;
+    text-shadow: 0 0 6px #fff, 0 0 12px var(--rosa); animation: bate 1.6s ease-in-out infinite;
   }
   @keyframes bate { 50% { transform: scale(1.18); } }
-  .bubble:hover .in { box-shadow: 0 0 0 3px #fff, 0 0 26px 8px rgba(255,79,163,.85), 0 0 60px rgba(190,80,255,.6), inset 0 -10px 18px rgba(120,20,160,.4); }
-  .bubble:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+  .bubble:hover .in { box-shadow: 0 0 0 2px #fff, 0 0 14px 4px rgba(255,79,163,.85), 0 0 32px rgba(190,80,255,.6), inset 0 -5px 9px rgba(120,20,160,.4); }
+  .bubble:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  .bubble::before { content: ""; position: absolute; inset: -12px; border-radius: 50%; } /* área de toque maior que a bolha */
   @keyframes brilho { to { filter: brightness(1.18); } }
 
   /* cartão da música */
@@ -245,7 +246,7 @@ const MOMENTOS = [
 // Cartão da música (abre ao tocar no buraco negro). Para trocar a foto use outra imagem de FOTOS
 // ou um arquivo da pasta, e para trocar a música cole o código do vídeo do YouTube.
 const MUSICA = {
-  youtube: "iYZtf_UxY_s",
+  youtube: "xX09AO3AtD8",
   foto: FOTOS[0],
   titulo: "Our Song",
   msg: "Press play and let this song tell you what my heart sounds like every time it thinks of you.",
@@ -271,7 +272,7 @@ function resize() {
   S = Math.min(W * 0.6 / 32, H * 0.42 / 30);
   discScale = Math.min(1, (W * 0.48) / (39 * S));
   cx = W / 2; cy = H * 0.45;
-  bubbleD = Math.max(58, Math.min(96, S * 5.2));
+  bubbleD = Math.max(28, Math.min(40, S * 2.4));
   for (const b of bubbles) { b.el.style.width = b.el.style.height = bubbleD + "px"; b.el.style.fontSize = (bubbleD * 0.42) + "px"; }
 }
 
@@ -306,7 +307,7 @@ for (let i = 0; i < NH; i++) {
 
 // ---------- disco da galáxia (horizontal, braços em espiral) ----------
 const ND = 9000, ARMS = 3;
-const D_ = { u: new Float32Array(ND), v: new Float32Array(ND), r: new Float32Array(ND), a: new Float32Array(ND), y: new Float32Array(ND),
+const D_ = { r: new Float32Array(ND), a: new Float32Array(ND), y: new Float32Array(ND),
              b: new Uint8Array(ND), s: new Float32Array(ND), p: new Float32Array(ND) };
 for (let i = 0; i < ND; i++) {
   const r = 7 + Math.pow(Math.random(), 1.6) * 32;
@@ -318,7 +319,16 @@ for (let i = 0; i < ND; i++) {
   D_.b[i] = k < 0.06 ? 5 : f < .4 ? (k < .5 ? 4 : 1) : f < .75 ? (k < .5 ? 0 : 2) : (k < .6 ? 3 : 2);
   D_.s[i] = rnd(0.5, 1.6);
   D_.p[i] = Math.random() * 6.283;
-  D_.u[i] = Math.random(); D_.v[i] = rnd(0.02, 0.06); // progresso da queda e velocidade
+}
+
+// ---------- fio de estrelas caindo no buraco negro (a galáxia continua do mesmo tamanho) ----------
+const NI = 1600;
+const I_ = { r: new Float32Array(NI), a: new Float32Array(NI), y: new Float32Array(NI), u: new Float32Array(NI),
+             v: new Float32Array(NI), b: new Uint8Array(NI), s: new Float32Array(NI) };
+for (let i = 0; i < NI; i++) {
+  I_.r[i] = rnd(6, 16); I_.a[i] = rnd(0, 6.283); I_.y[i] = gauss() * 0.5;
+  I_.u[i] = Math.random(); I_.v[i] = rnd(0.04, 0.1);
+  I_.b[i] = [4, 5, 1, 0][i % 4]; I_.s[i] = rnd(0.6, 1.5);
 }
 
 // ---------- bolhas de memórias ----------
@@ -585,15 +595,22 @@ function frame(now) {
 
   // disco horizontal girando ao redor do eixo vertical que passa pela ponta do coração
   for (let i = 0; i < ND; i++) {
-    const r0 = D_.r[i];
-    const u = (D_.u[i] + gt * D_.v[i]) % 1;                  // 0 = borda, 1 = engolida
-    const r = HR * 1.3 + (r0 - HR * 1.3) * (1 - u);         // vai se aproximando do centro
-    const a = D_.a[i] + gt * 1.1 / Math.sqrt(r0) + 3.0 * u * u; // e gira mais rápido ao cair
-    const fade = Math.min(1, u * 12) * (1 - Math.pow(u, 6));  // surge e some suavemente
-    const p = rot(Math.cos(a) * r * k, TIPY + D_.y[i] * (1 - u), Math.sin(a) * r * k, gYaw, gPitch);
+    const r = D_.r[i];
+    const a = D_.a[i] + gt * 1.1 / Math.sqrt(r);
+    const p = rot(Math.cos(a) * r * k, TIPY + D_.y[i], Math.sin(a) * r * k, gYaw, gPitch);
     const f = FOV / (FOV + p[2]);
     const tw = 0.7 + 0.3 * Math.sin(t * 2 + D_.p[i]);
-    (p[2] > hz ? far : near)[D_.b[i]].push(cx + p[0] * S * f, cy + p[1] * S * f, D_.s[i] * f * tw * sz * fade);
+    (p[2] > hz ? far : near)[D_.b[i]].push(cx + p[0] * S * f, cy + p[1] * S * f, D_.s[i] * f * tw * sz);
+  }
+  // estrelas caindo em espiral até o buraco negro
+  for (let i = 0; i < NI; i++) {
+    const u = (I_.u[i] + gt * I_.v[i]) % 1;                   // 0 = borda, 1 = engolida
+    const r = HR * 1.3 + (I_.r[i] - HR * 1.3) * (1 - u);
+    const a = I_.a[i] + gt * 1.1 / Math.sqrt(I_.r[i]) + 3.0 * u * u;
+    const fade = Math.min(1, u * 12) * (1 - Math.pow(u, 6));
+    const p = rot(Math.cos(a) * r * k, TIPY + I_.y[i] * (1 - u), Math.sin(a) * r * k, gYaw, gPitch);
+    const f = FOV / (FOV + p[2]);
+    (p[2] > hz ? far : near)[I_.b[i]].push(cx + p[0] * S * f, cy + p[1] * S * f, I_.s[i] * f * sz * fade * (1 + u));
   }
   // coração em pé, balançando de leve
   const sway = Math.sin(t * 0.6) * 0.4;
