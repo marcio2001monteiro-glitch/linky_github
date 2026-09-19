@@ -47,8 +47,8 @@
     -webkit-tap-highlight-color: transparent;
   }
   .bubble .in {
-    display: block; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; position: relative;
-    background: #2a0a3a;
+    display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; overflow: hidden; position: relative;
+    background: radial-gradient(circle at 50% 58%, var(--a), var(--b) 80%), #2a0a3a;
     box-shadow: 0 0 0 2px rgba(255,190,230,.8), 0 0 16px 3px rgba(255,79,163,.6), 0 0 40px rgba(190,80,255,.45),
                 inset 0 -10px 18px rgba(120,20,160,.55);
     animation: brilho 3.2s ease-in-out infinite alternate;
@@ -57,14 +57,37 @@
     content: ""; position: absolute; inset: 0; border-radius: 50%;
     background: radial-gradient(circle at 30% 24%, rgba(255,255,255,.6), rgba(255,255,255,0) 38%);
   }
-  .bubble img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; user-select: none; }
-  .bubble .cor { /* coraçãozinho na bolha */
-    position: absolute; right: -2px; bottom: -2px; font-size: 1.05rem; line-height: 1; color: #ff7ac0;
-    text-shadow: 0 0 8px var(--rosa), 0 0 14px var(--rosa); pointer-events: none; z-index: 2;
+  .bubble .cor { /* a foto fica escondida: só o coração aparece até abrir */
+    position: relative; z-index: 1; line-height: 1; color: rgba(255,255,255,.92); pointer-events: none;
+    text-shadow: 0 0 10px #fff, 0 0 24px var(--rosa); animation: bate 1.6s ease-in-out infinite;
   }
+  @keyframes bate { 50% { transform: scale(1.18); } }
   .bubble:hover .in { box-shadow: 0 0 0 3px #fff, 0 0 26px 8px rgba(255,79,163,.85), 0 0 60px rgba(190,80,255,.6), inset 0 -10px 18px rgba(120,20,160,.4); }
   .bubble:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
   @keyframes brilho { to { filter: brightness(1.18); } }
+
+  /* buraco negro clicável */
+  .hole {
+    position: fixed; left: 0; top: 0; padding: 0; border: 0; background: transparent; border-radius: 50%;
+    cursor: pointer; z-index: 60; -webkit-tap-highlight-color: transparent; will-change: transform;
+  }
+  .hole:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  .toast {
+    position: fixed; z-index: 90; pointer-events: none; opacity: 0; text-align: center; width: max-content; max-width: 86vw;
+    font-family: var(--script); font-weight: 700; font-size: clamp(1.3rem, 4.5vw, 1.9rem); color: #ffe1f1;
+    text-shadow: 0 0 10px var(--rosa), 0 0 26px var(--lilas);
+  }
+  .toast.on { animation: toast 2.8s ease forwards; }
+  @keyframes toast {
+    0% { opacity: 0; transform: translate(-50%, -50%) translateY(12px); }
+    15%, 78% { opacity: 1; transform: translate(-50%, -50%); }
+    100% { opacity: 0; transform: translate(-50%, -50%) translateY(-16px); }
+  }
+  /* a foto e o texto "aparecem" quando a bolha abre */
+  .polaroid img.revela { animation: revelaFoto 1.4s ease both; }
+  .texto.revela { animation: revelaTexto 1.1s .5s ease both; }
+  @keyframes revelaFoto { from { filter: blur(22px) brightness(.35) saturate(.4); transform: scale(1.12); } }
+  @keyframes revelaTexto { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } }
 
   /* janela da memória */
   .modal {
@@ -104,7 +127,8 @@
   @keyframes troca { from { opacity: .2; transform: translateX(14px); } }
 
   @media (prefers-reduced-motion: reduce) {
-    .msg h1, .dica, .bubble .in, .card, .modal { animation: none; }
+    .msg h1, .dica, .bubble .in, .bubble .cor, .card, .modal, .polaroid img.revela, .texto.revela, .toast.on { animation: none; }
+    .toast.on { opacity: 1; }
   }
 </style>
 </head>
@@ -115,8 +139,10 @@
   <h1 id="titulo"></h1>
   <p id="frase"></p>
 </div>
-<div class="dica" id="dica">tap the bubbles ✦</div>
+<div class="dica" id="dica">tap the bubbles and the black hole ✦</div>
 <div id="bolhas"></div>
+<button class="hole" id="hole" type="button" aria-label="Black hole: tap to pull the stars in"></button>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mTitulo">
   <div class="card" id="card">
@@ -203,7 +229,7 @@ function resize() {
   discScale = Math.min(1, (W * 0.48) / (39 * S));
   cx = W / 2; cy = H * 0.45;
   bubbleD = Math.max(58, Math.min(96, S * 5.2));
-  for (const b of bubbles) { b.el.style.width = b.el.style.height = bubbleD + "px"; }
+  for (const b of bubbles) { b.el.style.width = b.el.style.height = bubbleD + "px"; b.el.style.fontSize = (bubbleD * 0.42) + "px"; }
 }
 
 const rnd = (a, b) => a + Math.random() * (b - a);
@@ -213,6 +239,7 @@ const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
 const PAL = [[255,79,163],[255,122,192],[216,75,255],[160,90,255],[255,210,235],[255,255,255]];
 
 // ---------- coração (em pé) ----------
+const HR = 2.1; // raio do buraco negro (menor)
 const TIPY = 17; // altura da ponta do coração; o disco da galáxia gira exatamente aqui
 const NH = 7000;
 const H_ = { x: new Float32Array(NH), y: new Float32Array(NH), z: new Float32Array(NH),
@@ -252,28 +279,19 @@ for (let i = 0; i < ND; i++) {
 
 // ---------- bolhas de memórias ----------
 const bubbles = [];
-const GRADS = [["#ff4fa3", "#6a2cff"], ["#ff7ac0", "#c02cff"], ["#ff5e8a", "#8a2cff"], ["#e070ff", "#ff4fa3"]];
-function placeholder(i) {
-  const c = document.createElement("canvas"); c.width = 400; c.height = 500;
-  const g = c.getContext("2d"), [a, b] = GRADS[i % GRADS.length];
-  const gr = g.createLinearGradient(0, 0, 400, 500); gr.addColorStop(0, a); gr.addColorStop(1, b);
-  g.fillStyle = gr; g.fillRect(0, 0, 400, 500);
-  g.font = "230px serif"; g.textAlign = "center"; g.textBaseline = "middle";
-  g.fillStyle = "rgba(255,255,255,.85)"; g.fillText("♥", 200, 260);
-  return c.toDataURL("image/jpeg", .85);
-}
+const GRADS = [["rgba(255,79,163,.85)", "rgba(106,44,255,.75)"], ["rgba(255,122,192,.85)", "rgba(192,44,255,.75)"],
+               ["rgba(255,94,138,.85)", "rgba(138,44,255,.75)"], ["rgba(224,112,255,.85)", "rgba(255,79,163,.75)"]];
 const bolhasEl = document.getElementById("bolhas");
 MOMENTOS.forEach((m, i) => {
   const el = document.createElement("button");
   el.className = "bubble"; el.type = "button"; el.setAttribute("aria-label", "Open memory: " + m.titulo);
   const inner = document.createElement("span"); inner.className = "in";
-  const img = document.createElement("img"); img.alt = ""; img.draggable = false;
-  img.onerror = () => { img.onerror = null; img.src = placeholder(i); };
-  img.src = m.foto || placeholder(i);
-  m.thumb = img;
-  inner.appendChild(img);
   const cor = document.createElement("span"); cor.className = "cor"; cor.textContent = "♥";
-  el.append(inner, cor);
+  cor.style.animationDelay = (-i * 0.35) + "s";
+  inner.appendChild(cor);
+  const [ca, cb] = GRADS[i % GRADS.length];
+  el.style.setProperty("--a", ca); el.style.setProperty("--b", cb);
+  el.append(inner);
   bolhasEl.appendChild(el);
   el.addEventListener("click", () => abrir(i, el));
   el.addEventListener("pointerenter", () => hover++);
@@ -302,7 +320,7 @@ addEventListener("pointermove", e => {
   if (dragging) { dragYaw += (e.clientX - lx) * 0.006; dragPitch += (e.clientY - ly) * 0.006; lx = e.clientX; ly = e.clientY; }
 });
 addEventListener("pointerdown", e => {
-  if (e.target.closest(".bubble, .modal")) return;
+  if (e.target.closest(".bubble, .modal, .hole")) return;
   dragging = true; lx = e.clientX; ly = e.clientY;
   for (let i = 0; i < 6; i++) spawnHeart(e.clientX + rnd(-20, 20), e.clientY + rnd(-10, 10));
 });
@@ -312,15 +330,32 @@ function spawnHeart(x, y) {
   hearts.push({ x, y, vx: rnd(-.4, .4), vy: rnd(-1.6, -.6), life: 1, size: rnd(12, 26), hue: Math.random() < .5 ? "#ff7ac0" : "#e070ff" });
 }
 
+// ---------- buraco negro interativo ----------
+const holeEl = document.getElementById("hole"), toast = document.getElementById("toast");
+const TOASTS = ["You pull me in every single time ✦", "Falling for you never stops ♥", "My heart has no escape from yours ✦", "Infinite love lives right here ♥"];
+let holeHover = 0, holePos = { x: 0, y: 0 }, tIdx = 0, pull = 0, pullT = 0, pullTimer = 0;
+holeEl.addEventListener("pointerenter", () => holeHover = 1);
+holeEl.addEventListener("pointerleave", () => holeHover = 0);
+holeEl.addEventListener("click", () => {
+  pullT = 1; clearTimeout(pullTimer); pullTimer = setTimeout(() => pullT = 0, 1300);
+  for (let i = 0; i < 14; i++) spawnHeart(holePos.x + rnd(-30, 30), holePos.y + rnd(-30, 10));
+  toast.textContent = TOASTS[tIdx++ % TOASTS.length];
+  toast.style.left = holePos.x + "px"; toast.style.top = (holePos.y - 70) + "px";
+  toast.classList.remove("on"); void toast.offsetWidth; toast.classList.add("on");
+});
+
 // ---------- janela da memória ----------
 const modal = document.getElementById("modal"), card = document.getElementById("card");
 const mFoto = document.getElementById("mFoto"), mTitulo = document.getElementById("mTitulo"),
       mMsg = document.getElementById("mMsg"), mAss = document.getElementById("mAss"), mCont = document.getElementById("mCont");
 let atual = -1, ultimoEl = null;
+function revelar() {
+  for (const el of [mFoto, mMsg]) { el.classList.remove("revela"); void el.offsetWidth; el.classList.add("revela"); }
+}
 function mostrar(i, animar) {
   atual = (i + MOMENTOS.length) % MOMENTOS.length;
   const m = MOMENTOS[atual];
-  mFoto.src = m.thumb.src; // já é a foto carregada (ou o coração de reserva)
+  mFoto.src = m.foto; revelar();
   mTitulo.textContent = m.titulo; mMsg.textContent = m.msg; mAss.textContent = ASSINATURA;
   mCont.textContent = (atual + 1) + " / " + MOMENTOS.length;
   if (animar) { card.classList.remove("troca"); void card.offsetWidth; card.classList.add("troca"); }
@@ -373,29 +408,31 @@ function drawBuckets(bk) {
 }
 
 // arco de anel brilhante; o lado que "vem na nossa direção" fica mais claro (efeito Doppler)
+let holeBoost = 1;
 function ringArc(hx, hy, rx, ry, a0, a1, w, gt, alpha) {
   const n = 40, step = (a1 - a0) / n;
   ctx.lineCap = "round"; ctx.lineWidth = w;
   for (let k = 0; k < n; k++) {
     const s0 = a0 + k * step, s1 = s0 + step * 1.2;
     const dop = 0.5 + 0.5 * Math.cos((s0 + s1) / 2 - gt * 1.6);
-    ctx.strokeStyle = `rgba(255,${Math.round(140 + 100 * dop)},${Math.round(130 + 100 * dop)},${(alpha * (0.25 + 0.75 * dop)).toFixed(3)})`;
+    ctx.strokeStyle = `rgba(255,${Math.round(140 + 100 * dop)},${Math.round(130 + 100 * dop)},${Math.min(1, alpha * holeBoost * (0.25 + 0.75 * dop)).toFixed(3)})`;
     ctx.beginPath(); ctx.ellipse(hx, hy, rx, ry, 0, s0, s1); ctx.stroke();
   }
 }
 
 // buraco negro na ponta do coração: esfera preta, anel de luz e arcos de lente gravitacional
-function drawBlackHole(gPitch, gt) {
+function drawBlackHole(gPitch, gt, pull, glow) {
+  holeBoost = 1 + 0.9 * pull + 0.4 * glow;
   const p = rot(0, TIPY, 0, 0, gPitch);
   const f = FOV / (FOV + p[2]);
   const u = S * f, hx = cx + p[0] * u, hy = cy + p[1] * u;
-  const R = 3.6 * u, rx = 5.8 * u, ry = rx * Math.max(0.06, Math.sin(gPitch));
+  const R = HR * u * (1 + 0.3 * pull), rx = HR * 1.6 * u * (1 + 0.5 * pull), ry = rx * Math.max(0.06, Math.sin(gPitch));
   const PI = Math.PI;
 
   // brilho ao redor
   ctx.globalCompositeOperation = "lighter"; ctx.globalAlpha = 1;
   const g = ctx.createRadialGradient(hx, hy, R * 0.9, hx, hy, R * 3.6);
-  g.addColorStop(0, "rgba(255,120,190,.55)"); g.addColorStop(0.4, "rgba(190,60,230,.2)"); g.addColorStop(1, "rgba(0,0,0,0)");
+  g.addColorStop(0, `rgba(255,120,190,${Math.min(1, 0.55 * holeBoost)})`); g.addColorStop(0.4, "rgba(190,60,230,.2)"); g.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = g; ctx.fillRect(hx - R * 3.6, hy - R * 3.6, R * 7.2, R * 7.2);
 
   // metade de trás do anel (fica atrás da esfera)
@@ -419,6 +456,7 @@ function drawBlackHole(gPitch, gt) {
   // metade da frente do anel (passa na frente da esfera)
   ringArc(hx, hy, rx, ry, 0, PI, R * 0.30, gt, 0.28);
   ringArc(hx, hy, rx, ry, 0, PI, R * 0.09, gt, 0.95);
+  return { hx, hy, R };
 }
 
 const FOV = 90, BASE_PITCH = 0.34;
@@ -430,7 +468,8 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000); last = now;
   // a galáxia desacelera quando você aponta numa bolha ou abre uma memória
   const alvo = !modal.hidden ? 0.25 : hover > 0 ? 0.12 : 1;
-  ts += (alvo - ts) * 0.08; gt += dt * ts;
+  ts += (alvo - ts) * 0.08; pull += (pullT - pull) * 0.07;
+  gt += dt * (ts + pull * 5);
 
   dragYaw *= dragging ? 1 : 0.95; dragPitch *= dragging ? 1 : 0.95;
   gx += (tx - gx) * 0.05; gy += (ty - gy) * 0.05;
@@ -474,12 +513,13 @@ function frame(now) {
   const far = PAL.map(() => []), near = PAL.map(() => []);
   const hz = TIPY * Math.sin(gPitch); // profundidade do buraco negro
   const sz = S / 12 + 0.6;
+  const k = discScale * (1 - 0.45 * pull); // o toque no buraco negro puxa tudo para dentro
 
   // disco horizontal girando ao redor do eixo vertical que passa pela ponta do coração
   for (let i = 0; i < ND; i++) {
     const r = D_.r[i];
     const a = D_.a[i] + gt * 1.1 / Math.sqrt(r);
-    const p = rot(Math.cos(a) * r * discScale, TIPY + D_.y[i], Math.sin(a) * r * discScale, gYaw, gPitch);
+    const p = rot(Math.cos(a) * r * k, TIPY + D_.y[i], Math.sin(a) * r * k, gYaw, gPitch);
     const f = FOV / (FOV + p[2]);
     const tw = 0.7 + 0.3 * Math.sin(t * 2 + D_.p[i]);
     (p[2] > hz ? far : near)[D_.b[i]].push(cx + p[0] * S * f, cy + p[1] * S * f, D_.s[i] * f * tw * sz);
@@ -495,7 +535,10 @@ function frame(now) {
   }
 
   drawBuckets(far);                    // coração e o fundo do disco
-  drawBlackHole(gPitch, gt);           // esfera na ponta do coração
+  const hb = drawBlackHole(gPitch, gt, pull, holeHover); // esfera na ponta do coração
+  holePos.x = hb.hx; holePos.y = hb.hy;
+  holeEl.style.width = holeEl.style.height = Math.max(56, hb.R * 4) + "px";
+  holeEl.style.transform = `translate3d(${hb.hx.toFixed(1)}px,${hb.hy.toFixed(1)}px,0) translate(-50%,-50%)`;
   ctx.globalCompositeOperation = "lighter";
   drawBuckets(near);                   // parte do disco que passa na frente
 
@@ -503,7 +546,7 @@ function frame(now) {
   for (const b of bubbles) {
     const a = b.a0 + gt * 1.1 / Math.sqrt(b.r);
     const y = TIPY - b.elev + Math.sin(t * 1.2 + b.ph) * 1.4;
-    const p = rot(Math.cos(a) * b.r * discScale, y, Math.sin(a) * b.r * discScale, gYaw, gPitch);
+    const p = rot(Math.cos(a) * b.r * k, y, Math.sin(a) * b.r * k, gYaw, gPitch);
     const f = FOV / (FOV + p[2]);
     const sx = cx + p[0] * S * f, sy = cy + p[1] * S * f;
     const op = Math.min(1, Math.max(0.55, 1 - p[2] * 0.012));
