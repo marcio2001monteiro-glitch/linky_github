@@ -392,7 +392,7 @@ holeEl.addEventListener("pointerleave", () => holeHover = 0);
 holeEl.addEventListener("click", () => {
   pullT = 1; clearTimeout(pullTimer); pullTimer = setTimeout(() => pullT = 0, 1300);
   for (let i = 0; i < 14; i++) spawnHeart(holePos.x + rnd(-30, 30), holePos.y + rnd(-30, 10));
-  setTimeout(abrirMusica, 850); // deixa o efeito de gravidade aparecer antes de abrir o cartão
+  abrirMusica();
 });
 
 // ---------- cartão da música ----------
@@ -402,24 +402,29 @@ document.getElementById("musTitle").textContent = MUSICA.titulo;
 document.getElementById("musMsg").textContent = MUSICA.msg;
 let tocando = false;
 const musAberto = () => !musModal.classList.contains("oculto");
+function iniciarMusica() {
+  const f = document.createElement("iframe");
+  f.src = "https://www.youtube.com/embed/" + MUSICA.youtube + "?autoplay=1&mute=1&controls=1&rel=0&playsinline=1";
+  f.allow = "autoplay; encrypted-media; picture-in-picture"; f.allowFullscreen = true; f.title = "Our song";
+  musPlayer.replaceChildren(f); tocando = true;
+}
 function abrirMusica() {
   musModal.classList.remove("oculto"); musModal.removeAttribute("aria-hidden"); chip.hidden = true;
   document.getElementById("musFechar").focus({ preventScroll: true });
   document.getElementById("dica").classList.add("some");
+  if (!tocando) iniciarMusica();
 }
 function fecharMusica() {
   musModal.classList.add("oculto"); musModal.setAttribute("aria-hidden", "true");
   chip.hidden = !tocando; // a música continua tocando com o cartão fechado
 }
 document.getElementById("play").onclick = () => {
-  const f = document.createElement("iframe");
-  f.src = "https://www.youtube.com/embed/" + MUSICA.youtube + "?autoplay=1&rel=0&playsinline=1";
-  f.allow = "autoplay; encrypted-media; picture-in-picture"; f.allowFullscreen = true; f.title = "Our song";
-  musPlayer.replaceChildren(f); tocando = true;
+  iniciarMusica();
 };
 document.getElementById("musFechar").onclick = fecharMusica;
 musModal.addEventListener("click", e => { if (e.target === musModal) fecharMusica(); });
 chip.addEventListener("click", abrirMusica);
+setTimeout(abrirMusica, 250);
 
 // ---------- janela da memória ----------
 const modal = document.getElementById("modal"), card = document.getElementById("card");
